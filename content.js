@@ -31,10 +31,17 @@
   }
 
   function findCards() {
-    // cards are .card inside #post-data or any .card.mb-3 / .card-link
     const all = Array.from(document.querySelectorAll(".card"));
-    // filter to property cards that contain a rent
     return all.filter(c => /Rent\s*:/i.test(c.textContent));
+  }
+
+  function monthIndex(m){ return MONTHS.indexOf(m); }
+
+  function inMonthRange(cardMonth, fromIdx, toIdx) {
+    const mi = monthIndex(cardMonth);
+    if (mi === -1) return true; // no month info, keep
+    if (fromIdx <= toIdx) return mi >= fromIdx && mi <= toIdx;
+    return mi >= fromIdx || mi <= toIdx; // wraps year end
   }
 
   function buildPanel() {
@@ -43,51 +50,66 @@
     panel.id = "rentsearch-panel";
     panel.innerHTML = `
       <h4>RentSearch Filter</h4>
-      <label>From month</label>
-      <select id="rs-from">${MONTHS.map(m=>`<option value="${m}">${m}</option>`).join("")}</select>
-      <label>To month</label>
-      <select id="rs-to">${MONTHS.map(m=>`<option value="${m}">${m}</option>`).join("")}</select>
-      <div class="rs-row" style="margin-top:6px;">
-        <button id="rs-apply">Apply Filter</button>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div>
+          <label>Start month</label>
+          <select id="rs-from">${MONTHS.map(m=>`<option value="${m}">${m}</option>`).join("")}</select>
+        </div>
+        <div>
+          <label>End month</label>
+          <select id="rs-to">${MONTHS.map(m=>`<option value="${m}">${m}</option>`).join("")}</select>
+        </div>
+        <div>
+          <label>Highest rent (max BDT)</label>
+          <input type="number" id="rs-max-rent" placeholder="e.g. 10000" min="0" step="100" style="width:100%;padding:6px;box-sizing:border-box;">
+        </div>
+        <div>
+          <label>Max bedrooms</label>
+          <select id="rs-bed" style="width:100%;padding:6px;box-sizing:border-box;">
+            <option value="">Any</option>
+            ${[1,2,3,4,5,6].map(b=>`<option value="${b}">${b}</option>`).join("")}
+          </select>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <button id="rs-apply" style="flex:1;padding:8px;">Apply Filter</button>
+          <button id="rs-reset" style="flex:1;padding:8px;">Reset</button>
+        </div>
+        <div id="rs-count" style="color:#555;font-size:12px;"></div>
       </div>
-      <div class="rs-row" style="margin-top:6px;">
-        <button id="rs-reset">Reset</button>
-      </div>
-      <div id="rs-count" style="margin-top:6px;color:#555;"></div>
     `;
     document.body.appendChild(panel);
 
-    // default from January to February
+    // defaults
     panel.querySelector("#rs-from").value = "January";
-    panel.querySelector("#rs-to").value = "February";
+    panel.querySelector("#rs-to").value = "March";
 
     panel.querySelector("#rs-apply").addEventListener("click", apply);
     panel.querySelector("#rs-reset").addEventListener("click", reset);
   }
 
-  function monthIndex(m){ return MONTHS.indexOf(m); }
-
   function apply() {
     const from = document.getElementById("rs-from").value;
     const to = document.getElementById("rs-to").value;
+    const maxRent = parseInt(document.getElementById("rs-max-rent").value, 10);
+    const bedVal = document.getElementById("rs-bed").value;
+    const bedFilter = bedVal ? parseInt(bedVal, 10) : null;
     const fi = monthIndex(from), ti = monthIndex(to);
+
     const cards = findCards();
-    // show/hide
+
     cards.forEach(c => {
-      const m = parseMonth(c);
-      const mi = monthIndex(m);
-      let inRange = false;
-      if (fi <= ti) inRange = mi >= fi && mi <= ti;
-      else inRange = mi >= fi || mi <= ti;
-      c.classList.toggle("rs-hidden", !inRange);
+      const cardMonth = parseMonth(c);
+      const rent = parseRent(c);
+      const bed = parseBed(c);
+
+      const monthOk = inMonthRange(cardMonth, fi, ti);
+      const rentOk = maxRent ? rent <= maxRent : true;
+      const bedOk = bedFilter === null || bed <= bedFilter;
+
+      c.classList.toggle("rs-hidden", !(monthOk && rentOk && bedOk));
     });
-    // sort visible by rent desc then bed desc within their container
-    const containers = new Set(cards.map(c => c.parentElement));
-    containers.forEach(cont => {
-      const kids = Array.from(cont.children).filter(n => n.classList && n.classList.contains("card") || n.querySelector && n.querySelector(".card"));
-      // We sort the card elements (or their wrappers col-*)
-    });
-    // Sort wrappers: find parent column wrappers
+
+    // sort visible by rent desc then bed desc within each row container
     const wrappers = new Set();
     cards.forEach(c => { if (c.parentElement) wrappers.add(c.parentElement); });
     wrappers.forEach(w => {
@@ -106,7 +128,6 @@
         if (rb !== ra) return rb - ra;
         return parseBed(cb) - parseBed(ca);
       });
-      // reorder: visible first sorted, then hidden
       visible.concat(hidden).forEach(col => w.appendChild(col));
     });
 
@@ -116,16 +137,18 @@
 
   function reset() {
     findCards().forEach(c => c.classList.remove("rs-hidden"));
+    document.getElementById("rs-max-rent").value = "";
+    document.getElementById("rs-bed").value = "";
+    document.getElementById("rs-from").value = "January";
+    document.getElementById("rs-to").value = "March";
     document.getElementById("rs-count").textContent = "";
   }
 
-  // init
   function init() {
     buildPanel();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
-  // re-init on dynamic loads
   const obs = new MutationObserver(() => { if (!document.getElementById("rentsearch-panel")) buildPanel(); });
   obs.observe(document.body, { childList: true, subtree: true });
 })();
