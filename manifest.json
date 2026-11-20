@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "RentSearch - Month & Rent Filter",
+  "version": "1.0.0",
+  "description": "Filter property listings by availability month and sort by highest rent then beds.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["https://www.thetolet.com/*", "http://*/*", "https://*/*", "file:///*"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "RentSearch"
+  }
+}
